@@ -1,0 +1,53 @@
+import type { CSSProperties } from "react";
+
+/**
+ * Prism styles tuned for our dark UI — no white token backgrounds, soft contrast.
+ */
+export const chatPrismTheme: Record<string, CSSProperties> = {
+  'code[class*="language-"]': {
+    color: "#c8c4bf",
+    background: "transparent",
+    fontSize: "0.8125rem",
+    lineHeight: 1.65,
+    fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+  },
+  'pre[class*="language-"]': {
+    color: "#c8c4bf",
+    background: "hsl(228 16% 8%)",
+    margin: 0,
+    padding: "0.875rem 1rem",
+    borderRadius: "0.625rem",
+    overflow: "auto",
+    fontFamily: "var(--font-geist-mono), ui-monospace, monospace",
+  },
+  comment: { color: "#6b6a68", fontStyle: "italic" },
+  prolog: { color: "#6b6a68" },
+  doctype: { color: "#6b6a68" },
+  cdata: { color: "#6b6a68" },
+  punctuation: { color: "#7a7874" },
+  property: { color: "#7dd3a8" },
+  tag: { color: "#6ee7b7" },
+  boolean: { color: "#5ee9b5" },
+  number: { color: "#93c5fd" },
+  constant: { color: "#93c5fd" },
+  symbol: { color: "#fca5a5" },
+  deleted: { color: "#fca5a5" },
+  selector: { color: "#a7f3d0" },
+  "attr-name": { color: "#fcd34d" },
+  string: { color: "#a8b8cc" },
+  char: { color: "#a8b8cc" },
+  builtin: { color: "#7dd3a8" },
+  inserted: { color: "#a7f3d0" },
+  operator: { color: "#8a8884" },
+  entity: { color: "#7dd3a8" },
+  url: { color: "#6ee7b7", textDecoration: "underline" },
+  variable: { color: "#c4b5fd" },
+  atrule: { color: "#6ee7b7" },
+  "attr-value": { color: "#a8b8cc" },
+  function: { color: "#86efac" },
+  "class-name": { color: "#fde68a" },
+  regex: { color: "#a8b8cc" },
+  important: { color: "#fca5a5", fontWeight: "600" },
+  bold: { fontWeight: "600" },
+  italic: { fontStyle: "italic" },
+};
