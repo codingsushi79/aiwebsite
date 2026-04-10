@@ -6,6 +6,15 @@ const DEFAULT_MODEL = "llama3.1";
 
 type OllamaMessage = { role: "user" | "assistant" | "system"; content: string };
 
+/** ngrok free tier serves an HTML interstitial unless this header is present (any value). */
+function isNgrokUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname.toLowerCase().includes("ngrok");
+  } catch {
+    return url.toLowerCase().includes("ngrok");
+  }
+}
+
 export async function POST(request: Request) {
   if (!(await getSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,9 +51,10 @@ export async function POST(request: Request) {
 
   const ollamaHeaders: Record<string, string> = {
     "Content-Type": "application/json",
+    Accept: "application/json",
   };
-  if (baseUrl.includes("ngrok")) {
-    ollamaHeaders["ngrok-skip-browser-warning"] = "true";
+  if (isNgrokUrl(baseUrl)) {
+    ollamaHeaders["ngrok-skip-browser-warning"] = "69420";
   }
 
   let ollamaRes: Response;
@@ -57,6 +67,7 @@ export async function POST(request: Request) {
         messages,
         stream: true,
       }),
+      redirect: "follow",
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
@@ -64,6 +75,31 @@ export async function POST(request: Request) {
       {
         error: "Could not reach Ollama. Is it running on localhost?",
         detail: message,
+      },
+      { status: 502 },
+    );
+  }
+
+  const contentType = ollamaRes.headers.get("content-type") ?? "";
+
+  if (ollamaRes.ok && contentType.includes("text/html")) {
+    ollamaRes.body?.cancel();
+    console.error("[api/chat] Upstream returned HTML instead of Ollama stream (often ngrok interstitial)", {
+      host: (() => {
+        try {
+          return new URL(baseUrl).host;
+        } catch {
+          return baseUrl;
+        }
+      })(),
+    });
+    return NextResponse.json(
+      {
+        error: "Tunnel returned an HTML page instead of Ollama",
+        detail:
+          "This usually means ngrok’s browser warning page was served instead of your API. " +
+          "Redeploy after updating this app, confirm OLLAMA_URL uses https and matches your ngrok URL, " +
+          "or use ngrok paid / another tunnel (Cloudflare Tunnel) without that page.",
       },
       { status: 502 },
     );
@@ -78,11 +114,16 @@ export async function POST(request: Request) {
       /* keep baseUrl */
     }
     const preview = text.trim().slice(0, 2000);
-    const fallbackDetail =
-      preview ||
-      `Empty body from ${host} (HTTP ${ollamaRes.status} ${ollamaRes.statusText || ""}). ` +
-        "Typical causes: stale or wrong OLLAMA_URL on Vercel vs current ngrok URL; Ollama not running; " +
-        `model "${model}" missing — run ollama pull on the Ollama machine and match OLLAMA_MODEL.`;
+    const looksLikeNgrokPage =
+      preview.includes("<!DOCTYPE html") && isNgrokUrl(baseUrl);
+    const fallbackDetail = looksLikeNgrokPage
+      ? "ngrok returned its HTML warning/interstitial page instead of forwarding to Ollama. " +
+        "The app sends ngrok-skip-browser-warning; redeploy this version, confirm OLLAMA_URL matches your tunnel (https, no typo), and that ngrok is still running. " +
+        "If it persists, try Cloudflare Tunnel or ngrok’s paid plan."
+      : preview ||
+        `Empty body from ${host} (HTTP ${ollamaRes.status} ${ollamaRes.statusText || ""}). ` +
+          "Typical causes: stale or wrong OLLAMA_URL on Vercel vs current ngrok URL; Ollama not running; " +
+          `model "${model}" missing — run ollama pull on the Ollama machine and match OLLAMA_MODEL.`;
 
     console.error("[api/chat] Ollama upstream not OK", {
       upstreamStatus: ollamaRes.status,
