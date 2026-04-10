@@ -55,6 +55,9 @@ export async function POST(request: Request) {
   };
   if (isNgrokUrl(baseUrl)) {
     ollamaHeaders["ngrok-skip-browser-warning"] = "69420";
+    // ngrok’s edge may reject default Node/undici User-Agent or certain routes; mimic a normal browser.
+    ollamaHeaders["User-Agent"] =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
   }
 
   let ollamaRes: Response;
@@ -116,14 +119,29 @@ export async function POST(request: Request) {
     const preview = text.trim().slice(0, 2000);
     const looksLikeNgrokPage =
       preview.includes("<!DOCTYPE html") && isNgrokUrl(baseUrl);
-    const fallbackDetail = looksLikeNgrokPage
-      ? "ngrok returned its HTML warning/interstitial page instead of forwarding to Ollama. " +
+    const ngrokErr = ollamaRes.headers.get("ngrok-error-code");
+
+    let fallbackDetail: string;
+    if (looksLikeNgrokPage) {
+      fallbackDetail =
+        "ngrok returned its HTML warning/interstitial page instead of forwarding to Ollama. " +
         "The app sends ngrok-skip-browser-warning; redeploy this version, confirm OLLAMA_URL matches your tunnel (https, no typo), and that ngrok is still running. " +
-        "If it persists, try Cloudflare Tunnel or ngrok’s paid plan."
-      : preview ||
+        "If it persists, try Cloudflare Tunnel or ngrok’s paid plan.";
+    } else if (preview) {
+      fallbackDetail = preview;
+    } else if (isNgrokUrl(baseUrl) && ollamaRes.status === 403) {
+      fallbackDetail =
+        "ngrok returned HTTP 403 with an empty body. That usually means ngrok’s edge blocked the request before it reached your PC — " +
+        "common causes: Traffic Policy / IP allowlists on this tunnel in the ngrok dashboard, account or endpoint restrictions, or known issues with server-side calls from cloud hosts (e.g. Vercel) on the free tier. " +
+        "Open ngrok.com → your tunnel → Traffic Inspector for the failing request; remove deny rules. " +
+        "If it still fails, use Cloudflare Tunnel (cloudflared) instead of ngrok, or run chat only locally. " +
+        (ngrokErr ? `ngrok-error-code: ${ngrokErr}. ` : "");
+    } else {
+      fallbackDetail =
         `Empty body from ${host} (HTTP ${ollamaRes.status} ${ollamaRes.statusText || ""}). ` +
-          "Typical causes: stale or wrong OLLAMA_URL on Vercel vs current ngrok URL; Ollama not running; " +
-          `model "${model}" missing — run ollama pull on the Ollama machine and match OLLAMA_MODEL.`;
+        "Typical causes: stale or wrong OLLAMA_URL on Vercel vs current ngrok URL; Ollama not running; " +
+        `model "${model}" missing — run ollama pull on the Ollama machine and match OLLAMA_MODEL.`;
+    }
 
     console.error("[api/chat] Ollama upstream not OK", {
       upstreamStatus: ollamaRes.status,
@@ -132,6 +150,7 @@ export async function POST(request: Request) {
       model,
       bodyLength: text.length,
       bodyPreview: preview.slice(0, 500),
+      ngrokErrorCode: ngrokErr,
     });
 
     return NextResponse.json(
