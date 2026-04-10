@@ -187,11 +187,19 @@ export default function Home() {
       });
 
       if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        const msg =
+        const errBody = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+          status?: number;
+        };
+        let msg =
           typeof errBody.error === "string"
             ? errBody.error
             : `Request failed (${res.status})`;
+        if (typeof errBody.detail === "string" && errBody.detail.trim()) {
+          const d = errBody.detail.trim();
+          msg += `: ${d.length > 400 ? `${d.slice(0, 400)}…` : d}`;
+        }
         throw new Error(msg);
       }
 

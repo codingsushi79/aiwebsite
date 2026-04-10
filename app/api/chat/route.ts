@@ -29,11 +29,29 @@ export async function POST(request: Request) {
   const baseUrl = (process.env.OLLAMA_URL ?? DEFAULT_OLLAMA_URL).replace(/\/$/, "");
   const model = process.env.OLLAMA_MODEL ?? DEFAULT_MODEL;
 
+  if (process.env.VERCEL === "1" && !(process.env.OLLAMA_URL ?? "").trim()) {
+    return NextResponse.json(
+      {
+        error:
+          "OLLAMA_URL is not set. A Vercel deployment cannot reach Ollama on your computer unless you set OLLAMA_URL to a public URL (for example your ngrok https URL).",
+        hint: "Vercel → Project → Settings → Environment Variables → add OLLAMA_URL, then redeploy.",
+      },
+      { status: 502 },
+    );
+  }
+
+  const ollamaHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (baseUrl.includes("ngrok")) {
+    ollamaHeaders["ngrok-skip-browser-warning"] = "true";
+  }
+
   let ollamaRes: Response;
   try {
     ollamaRes = await fetch(`${baseUrl}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: ollamaHeaders,
       body: JSON.stringify({
         model,
         messages,
