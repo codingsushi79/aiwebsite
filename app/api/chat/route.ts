@@ -71,11 +71,33 @@ export async function POST(request: Request) {
 
   if (!ollamaRes.ok) {
     const text = await ollamaRes.text();
+    let host = baseUrl;
+    try {
+      host = new URL(baseUrl).host;
+    } catch {
+      /* keep baseUrl */
+    }
+    const preview = text.trim().slice(0, 2000);
+    const fallbackDetail =
+      preview ||
+      `Empty body from ${host} (HTTP ${ollamaRes.status} ${ollamaRes.statusText || ""}). ` +
+        "Typical causes: stale or wrong OLLAMA_URL on Vercel vs current ngrok URL; Ollama not running; " +
+        `model "${model}" missing — run ollama pull on the Ollama machine and match OLLAMA_MODEL.`;
+
+    console.error("[api/chat] Ollama upstream not OK", {
+      upstreamStatus: ollamaRes.status,
+      upstreamStatusText: ollamaRes.statusText,
+      host,
+      model,
+      bodyLength: text.length,
+      bodyPreview: preview.slice(0, 500),
+    });
+
     return NextResponse.json(
       {
         error: "Ollama returned an error",
         status: ollamaRes.status,
-        detail: text.slice(0, 2000),
+        detail: fallbackDetail,
       },
       { status: 502 },
     );

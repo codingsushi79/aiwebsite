@@ -198,7 +198,9 @@ export default function Home() {
             : `Request failed (${res.status})`;
         if (typeof errBody.detail === "string" && errBody.detail.trim()) {
           const d = errBody.detail.trim();
-          msg += `: ${d.length > 400 ? `${d.slice(0, 400)}…` : d}`;
+          msg += `: ${d.length > 600 ? `${d.slice(0, 600)}…` : d}`;
+        } else if (typeof errBody.status === "number") {
+          msg += ` (upstream HTTP ${errBody.status})`;
         }
         throw new Error(msg);
       }
