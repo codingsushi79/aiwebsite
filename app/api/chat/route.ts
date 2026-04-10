@@ -15,6 +15,16 @@ function isNgrokUrl(url: string): boolean {
   }
 }
 
+/** Cloudflare quick tunnel hostnames (`*.trycloudflare.com`). */
+function isTryCloudflareUrl(url: string): boolean {
+  try {
+    const h = new URL(url).hostname.toLowerCase();
+    return h.endsWith(".trycloudflare.com") || h.includes("cfargotunnel");
+  } catch {
+    return url.toLowerCase().includes("trycloudflare");
+  }
+}
+
 export async function POST(request: Request) {
   if (!(await getSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -42,7 +52,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "OLLAMA_URL is not set. A Vercel deployment cannot reach Ollama on your computer unless you set OLLAMA_URL to your tunnel URL (e.g. https://….ngrok-free.dev).",
+          "OLLAMA_URL is not set. A Vercel deployment cannot reach Ollama on your computer unless you set OLLAMA_URL to your tunnel URL (e.g. https://….trycloudflare.com or https://….ngrok-free.dev).",
         hint: "Vercel → Project → Settings → Environment Variables → add OLLAMA_URL, then redeploy.",
       },
       { status: 502 },
@@ -55,7 +65,9 @@ export async function POST(request: Request) {
   };
   if (isNgrokUrl(baseUrl)) {
     ollamaHeaders["ngrok-skip-browser-warning"] = "69420";
-    // ngrok’s edge may reject default Node/undici User-Agent or certain routes; mimic a normal browser.
+  }
+  if (isNgrokUrl(baseUrl) || isTryCloudflareUrl(baseUrl)) {
+    // Some tunnel edges reject default Node fetch; mimic a browser (helps ngrok / occasional CF quick-tunnel 403).
     ollamaHeaders["User-Agent"] =
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
   }
@@ -136,10 +148,15 @@ export async function POST(request: Request) {
         "Open ngrok.com → your tunnel → Traffic Inspector for the failing request; remove deny rules. " +
         "If it still fails, use Cloudflare Tunnel (cloudflared) instead of ngrok, or run chat only locally. " +
         (ngrokErr ? `ngrok-error-code: ${ngrokErr}. ` : "");
+    } else if (isTryCloudflareUrl(baseUrl) && ollamaRes.status === 403) {
+      fallbackDetail =
+        "Cloudflare quick tunnel returned HTTP 403 with an empty body. Common causes: (1) OLLAMA_URL on Vercel does not match the current tunnel — each time you restart `cloudflared`, the *.trycloudflare.com hostname changes; update env and redeploy. " +
+        "(2) `cloudflared` is not running or Ollama is not on 127.0.0.1:11434. " +
+        "(3) The tunnel edge sometimes blocks requests from cloud hosts — try again after redeploy with this app version (sends a browser User-Agent), or run the Next app locally, or set up a named Cloudflare Tunnel on your account for a stable hostname.";
     } else {
       fallbackDetail =
         `Empty body from ${host} (HTTP ${ollamaRes.status} ${ollamaRes.statusText || ""}). ` +
-        "Typical causes: stale or wrong OLLAMA_URL on Vercel vs current ngrok URL; Ollama not running; " +
+        "Typical causes: stale or wrong OLLAMA_URL on Vercel vs your current tunnel URL; tunnel or Ollama not running; " +
         `model "${model}" missing — run ollama pull on the Ollama machine and match OLLAMA_MODEL.`;
     }
 
