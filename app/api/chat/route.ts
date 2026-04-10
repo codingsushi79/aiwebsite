@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "OLLAMA_URL is not set. A Vercel deployment cannot reach Ollama on your computer unless you set OLLAMA_URL to a public URL (for example your ngrok https URL).",
+          "OLLAMA_URL is not set. A Vercel deployment cannot reach Ollama on your computer unless you set OLLAMA_URL to your tunnel URL (e.g. https://….ngrok-free.dev).",
         hint: "Vercel → Project → Settings → Environment Variables → add OLLAMA_URL, then redeploy.",
       },
       { status: 502 },
